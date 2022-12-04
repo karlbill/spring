@@ -81,7 +81,7 @@ O Spring MVC foi adicionado ao projeto a partir da inclusão do Starter Web (spr
 ### Criação do primeiro Controller
 - Criação da camada *controllers*
 - Criação do arquivo *TestController.java*
-  - Anotação **@Controller**: configura a classe como um **Java Bean**, objetos gerenciados pelo container do Spring.
+  - Anotação **@Controller**: a anotação @Controller é uma interface que também recebe uma Anotação @Component, que configura a interface como um **Java Bean**, objetos gerenciados pelo container do Spring; neste caso, como Controller, um componente que gerencia requisições Web.
 - Criação do método *test*
   - Anotação **@GetMapping**: configura o endpoint para a *Action* (método) do *Controller* (classe);
   - Anotação **@ResponseBody**: configura a *Action* para aceitar um tipo *String* como retorno
@@ -111,17 +111,172 @@ O Spring fornece um container específico para Injeção de Dependência e, cons
 > Representado pela interface: ApplicationContext.
 
 ### Criação de um componente Spring
+Para informarmos ao Spring que estamos criando um componente, utilizamos a Anotação @Component, desse modo, ao instanciar a aplicação o Spring Boot também fará a instanciação do Componente Spring:
+1. Criação de uma camada *components*
+2. Criação do componente *TestComponent.java*
+3. Configução do componente com a Anotação @Component: transforma a classe em um Bean gerenciado pelo Spring
+```
+package br.com.karlbill.demo.components;
 
+import org.springframework.stereotype.Component;
 
+@Component
+public class TestComponent {
+    
+    public TestComponent(){
+        System.out.println("Componente instanciado.");
+    }
+}  
+```
+Iniciando a aplicação, o Spring realiza um escaneamento (**component scanning**) das classes do projeto e, encontrando uma Anotação @Component em alguma delas, instancia essas classes como Beans gerenciados pelo container:
+> A Anotação @SpringBootApplication (interface abstrata), da classe principal da aplicação, é a responsável pelo escaneamento da aplicação. (clicar na anotação com o botão CTRL pressionado para analisá-la.)
+  
+![image](https://user-images.githubusercontent.com/39681960/205514571-85e21c43-fb22-4cb9-8ed7-72391561812a.png)
 
+### Injeção de Dependência com o Spring (Bean dentro de Bean)
+Vamos simular uma situação geral de como uma injeção de dependência funciona, sem a utilização de nenhum exemplo prático mas, simplesmente, chamando cada Bean gerenciado pela sua função, ou seja: 
+1. Vamos criar uma interface TestInterface que será implementada por nosso componente já criado TestComponent;
+```
+package br.com.karlbill.demo.interfaces;
 
+public interface TestInterface {
 
+    void testar();
+    
+}
+```
 
+```
+package br.com.karlbill.demo.components;
 
+import org.springframework.stereotype.Component;
 
+import br.com.karlbill.demo.interfaces.TestInterface;
 
+@Component
+public class TestComponent implements TestInterface{
+    
+    public TestComponent(){
+        System.out.println("Componente instanciado.");
+    }
 
+    @Override
+    public void testar() {
+        System.out.println("ImplementaÃ§Ã£o do mÃ©todo da interface.");
+        
+    }
+}  
+```
+2. Criaremos um serviço TestService que fará a injeção de dependência da interface TestInterface, via construtor da classe;
+```
+package br.com.karlbill.demo.services;
 
+import org.springframework.stereotype.Component;
 
+import br.com.karlbill.demo.interfaces.TestInterface;
 
+@Component
+public class TestService {
 
+    private TestInterface component;
+
+    public TestService(TestInterface component) {
+        this.component = component;
+
+        System.out.println("TestService: "+ this.component);
+    }
+    
+}  
+```
+3. Por fim, nosso TestController injetará a dependência da classe de serviço, também via contrutor da classe;  
+```
+package br.com.karlbill.demo.controllers;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import br.com.karlbill.demo.services.TestService;
+
+@Controller
+public class TestController {
+
+    private TestService service;
+
+    public TestController(TestService service) {
+        this.service = service;
+        System.out.printf("Construtor do controller instanciado: %s", this.service );
+    }
+
+    @GetMapping("/test")
+    @ResponseBody
+    public String test(){
+        return "Test";
+    }
+}  
+```  
+
+Ao iniciarmos a aplicação, o Spring fará a instanciação de todos esses Beans, na ordem correta em que devem ser instanciados:
+
+![image](https://user-images.githubusercontent.com/39681960/205519689-1acb8c87-b60e-411e-a3a1-b69ac6161c7a.png)
+
+### Anotação Autowired
+A Anotação @Autowired, quando relacionada a um construtor, é responsável por fazer com que o Spring saiba qual construtor deve ser instanciado, no caso de uma classe que tenha mais de um construtor e não tenha definido o construtor-padrão, por exemplo:
+- Vamos declarar dois construtores para a classe TestService, ambos recebendo um parâmetro, um TestInterface e uma String, respectivamente:
+  
+```
+package br.com.karlbill.demo.services;
+
+import org.springframework.stereotype.Component;
+import br.com.karlbill.demo.interfaces.TestInterface;
+
+@Component
+public class TestService {
+
+    private TestInterface component;
+
+    public TestService(TestInterface component) {
+        this.component = component;
+
+        System.out.println("TestService: "+ this.component);
+    }
+   
+    public TestService(String component) {}     
+}  
+```
+Ao executarmos a aplicação, receberemos um erro **No default constructor found**, porque o Spring não sabe qual dos construtores deve instanciar:
+
+![image](https://user-images.githubusercontent.com/39681960/205522432-1bac10ce-8789-48a1-97fc-80bbda90a1da.png)
+
+Então, o primeiro uso da anotação @Autowired é para solucionar esse tipo de problema pois, ao anotarmos um construtor com @Autowired, estaremos informando ao Spring que este deverá ser o construtor a ser instanciado:
+  
+![image](https://user-images.githubusercontent.com/39681960/205522746-e04348fb-6105-424c-ac26-ed5f352b413d.png)
+  
+- Pontos de Injeção:
+  - Em construtor (como vimos acima), o mais recomendado.
+  - Em atributo da classe
+  - Em métodos setters 
+  
+Obs: quando usamos o @Autowired, estamos informando que aquele atributo anotado é uma dependência da classe em questão e, portanto, a classe necessita dessa injeção para funcionar corretamente. 
+  > A menos que seja passado o parâmetro **required=false** na Anotação.
+  
+  
+### Configuração de Beans
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
